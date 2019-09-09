@@ -76,36 +76,100 @@ def getCoverage(path):
 
     return statsData.instructionsCoverage()
 
-#Use gcov for coverage    
+def runProgram(kleeCommand, directoryLLVM, directoryGCOV, file):
+    process= subprocess.Popen([kleeCommand], shell=True)
+    process.wait()
+    os.chdir(directoryGCOV)
+
+    #Change this code to the kleestar stuff
+    runTests = "klee-replay " + file + " " + directoryLLVM + "/klee-last/*.ktest"
+    process=subprocess.Popen([runTests], shell=True)
+    process.wait()
+    
+    runGCOV = "gcov " + file
+    process = subprocess.Popen([runGCOV], shell=True, stdout=subprocess.PIPE)
+    out, err = process.communicate()
+    os.chdir(directoryLLVM)
+    
+    return out.decode('utf-8')
+    
+    
+#Use gcov for coverage
+#Need to instrument c files first
 def main():
     runCoreutils = False 
     parser = argparse.ArgumentParser(description='Run C program on Klee')
-    parser.add_argument('directory', type=str, nargs=1, help='directory of bc files')
-
+    parser.add_argument('directoryLLVM', type=str, nargs=1, help='directory of bc files')
+    parser.add_argument('directoryGCOV', type=str, nargs=1, help='dictory of gcov-instrumented executables')
+    
     args = parser.parse_args()
-    directory = args.directory[0]
-
-    os.chdir(directory)
+    directoryLLVM = args.directoryLLVM[0]
+    directoryGCOV = args.directoryGCOV[0]
+    os.chdir(directoryLLVM)
     files = subprocess.run(["ls"], stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
     bcFiles = [file for file in files if ".bc" in file]
+    cFiles = [file for file in files if ".c" in file]
+    os.chdir(directoryGCOV)
+    files = subprocess.run(["ls"], stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
+    gcdaFile = [file for file in files if ".gcda" in file]
+    print("gcda: ", gcdaFile)
+    os.chdir(directoryLLVM)
 
+    newBcFiles = []
     for file in bcFiles:
-        path = directory+"/"+file
-        print("Running ", file)
-        runNoProfiling = "klee --optimize --libc=uclibc --posix-runtime " + path + " --sym-args 0 4 4"
-        runWithProfiling = "klee -search nurs:bc --optimize --libc=uclibc --posix-runtime " + path + " --sym-args 0 4 4"
-        process= subprocess.Popen([runWithProfiling], shell=True)
-        time.sleep(180)
-        process.terminate()
-        coverage = getCoverage(directory+"/klee-last/run.stats")
-        print("Coverage with profiling: ", coverage, "%")
-        process = subprocess.Popen([runNoProfiling], shell=True)
-        time.sleep(180)
-        process.terminate()
-        coverage = getCoverage(directory+"/klee-last/run.stats")
-        print("Coverage without profiling: ", coverage, "%")
-        print()
+        name = file[0:-3]
+        found = False
+        for file2 in gcdaFile:
+            #print((name,file2[0:-2]))
+            if name == file2[0:-5]:
+                found = True
+                break
+        if found:
+            newBcFiles += [file]
+    bcFiles = newBcFiles
+    results = []
 
-        
+    count = 0
+    for i in range(5,len(bcFiles)):
+        file = bcFiles[i]
+        path = directoryLLVM+"/"+file
+        result = [file]
+        print("Running file: ", file)
+        #sym-stdout - look it up
+        #Use kleestar command on variable 'file'
+        """
+        runNoProfiling = "klee --simplify-sym-indices --write-cvcs --write-cov --output-module\
+                     --max-memory=1000 --disable-inlining --optimize --use-forked-solver --use-cex-cache\
+                     --libc=uclibc --posix-runtime -external-calls=all --o nly-output-states-covering-new\
+                     --max-sym-array-size=4096 --max-instruction-time=30 --max-time=300 --watchdog\
+                     --max-memory-inhibit=false --max-static-fork-pct=1 --max-static-solve-pct=1\
+                     --max-static-cpfork-pct=1 --switch-type=internal --search=random-path --search=nurs:covnew\
+                     --use-batching-search --batch-instructions=10000 " + path + " --sym-args 0 1 10 --sym-args 0 2 2\
+                     --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        runWithProfiling = "klee --simplify-sym-indices --write-cvcs --write-cov --output-module\
+                     --max-memory=1000 --disable-inlining --optimize --use-forked-solver --use-cex-cache\
+                     --libc=uclibc --posix-runtime -external-calls=all --only-output-states-covering-new\
+                     --max-sym-array-size=4096 --max-instruction-time=30 --max-time=300 --watchdog\
+                     --max-memory-inhibit=false --max-static-fork-pct=1 --max-static-solve-pct=1\
+                     --max-static-cpfork-pct=1 --switch-type=internal --search=nurs:bc --search=nurs:covnew\
+                     --use-batching-search --batch-instructions=10000 " + path + " --sym-args 0 1 10 --sym-args 0 2 2\
+                     --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+
+        outProfiling = runProgram(runWithProfiling, directoryLLVM, directoryGCOV, file[0:-3])
+        outNoProfiling = runProgram(runNoProfiling, directoryLLVM, directoryGCOV, file[0:-3])
+        result += [outProfiling, outNoProfiling]
+        results += [result]
+        if count == 2:
+            break
+        count += 1
+    for i in results:
+        print("File: ", i[0])
+        print("With profiling result: ")
+        print(i[1])
+        print("Without profiling: ")
+        print(i[2])
+    #print(newBcFiles)
+    """
+             
            
 main()

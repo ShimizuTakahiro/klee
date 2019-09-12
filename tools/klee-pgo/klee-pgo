@@ -96,8 +96,11 @@ def runProgram(kleeCommand, directoryLLVM, directoryGCOV, file):
     
 #Use gcov for coverage
 #Need to instrument c files first
+#sort must have --parallel=1
+#don't run: kill, chco
 def main():
-    runCoreutils = False 
+    exclude = ("kill", "chcon", "chown", "chroot", "dd", "ginstall", "stdbuf", 
+               "libstdbuf", "rm", "rmdir", "unlink")
     parser = argparse.ArgumentParser(description='Run C program on Klee')
     parser.add_argument('directoryLLVM', type=str, nargs=1, help='directory of bc files')
     parser.add_argument('directoryGCOV', type=str, nargs=1, help='dictory of gcov-instrumented executables')
@@ -118,6 +121,13 @@ def main():
     newBcFiles = []
     for file in bcFiles:
         name = file[0:-3]
+        noRun = False
+        for exc in exclude:
+            if exc == name:
+                noRun = True
+                break
+        if noRun:
+            continue
         found = False
         for file2 in gcdaFile:
             #print((name,file2[0:-2]))
@@ -130,30 +140,26 @@ def main():
     results = []
 
     count = 0
-    for i in range(5,len(bcFiles)):
-        file = bcFiles[i]
+    for file in bcFiles:
+        if file[0:-3] != "ls":
+            continue
         path = directoryLLVM+"/"+file
         result = [file]
         print("Running file: ", file)
         #sym-stdout - look it up
         #Use kleestar command on variable 'file'
-        """
-        runNoProfiling = "klee --simplify-sym-indices --write-cvcs --write-cov --output-module\
-                     --max-memory=1000 --disable-inlining --optimize --use-forked-solver --use-cex-cache\
-                     --libc=uclibc --posix-runtime -external-calls=all --o nly-output-states-covering-new\
-                     --max-sym-array-size=4096 --max-instruction-time=30 --max-time=300 --watchdog\
-                     --max-memory-inhibit=false --max-static-fork-pct=1 --max-static-solve-pct=1\
-                     --max-static-cpfork-pct=1 --switch-type=internal --search=random-path --search=nurs:covnew\
-                     --use-batching-search --batch-instructions=10000 " + path + " --sym-args 0 1 10 --sym-args 0 2 2\
-                     --sym-files 1 8 --sym-stdin 8 --sym-stdout"
-        runWithProfiling = "klee --simplify-sym-indices --write-cvcs --write-cov --output-module\
-                     --max-memory=1000 --disable-inlining --optimize --use-forked-solver --use-cex-cache\
-                     --libc=uclibc --posix-runtime -external-calls=all --only-output-states-covering-new\
-                     --max-sym-array-size=4096 --max-instruction-time=30 --max-time=300 --watchdog\
-                     --max-memory-inhibit=false --max-static-fork-pct=1 --max-static-solve-pct=1\
-                     --max-static-cpfork-pct=1 --switch-type=internal --search=nurs:bc --search=nurs:covnew\
-                     --use-batching-search --batch-instructions=10000 " + path + " --sym-args 0 1 10 --sym-args 0 2 2\
-                     --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        runNoProfiling = " klee --max-memory=1000 --disable-inlining\
+                          --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                          --only-output-states-covering-new --max-sym-array-size=4096\
+                          --max-time=3600 --watchdog --switch-type=internal --search=random-path\
+                          " + path + " --sym-args 0 1 10 --sym-args 0 2 3\
+                          --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        runWithProfiling = "klee --max-memory=1000 --disable-inlining\
+                          --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                          --only-output-states-covering-new --max-sym-array-size=4096\
+                          --max-time=3600 --watchdog --switch-type=internal --search=nurs:bc\
+                          " + path + " --sym-args 0 1 10 --sym-args 0 2 3\
+                          --sym-files 1 8 --sym-stdin 8 --sym-stdout"
 
         outProfiling = runProgram(runWithProfiling, directoryLLVM, directoryGCOV, file[0:-3])
         outNoProfiling = runProgram(runNoProfiling, directoryLLVM, directoryGCOV, file[0:-3])
@@ -169,7 +175,7 @@ def main():
         print("Without profiling: ")
         print(i[2])
     #print(newBcFiles)
-    """
+
              
            
 main()

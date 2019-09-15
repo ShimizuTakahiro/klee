@@ -141,7 +141,7 @@ def main():
 
     count = 0
     for file in bcFiles:
-        if file[0:-3] != "ls":
+        if file[0:-3] != "od":
             continue
         path = directoryLLVM+"/"+file
         result = [file]
@@ -158,7 +158,7 @@ def main():
                           --optimize --libc=uclibc --posix-runtime -external-calls=all\
                           --only-output-states-covering-new --max-sym-array-size=4096\
                           --max-time=3600 --watchdog --switch-type=internal --search=nurs:bc\
-                          " + path + " --sym-args 0 1 10 --sym-args 0 2 3\
+                          " + path + " --sym-args 0 1 10 --sym-args 0 3 4\
                           --sym-files 1 8 --sym-stdin 8 --sym-stdout"
 
         outProfiling = runProgram(runWithProfiling, directoryLLVM, directoryGCOV, file[0:-3])

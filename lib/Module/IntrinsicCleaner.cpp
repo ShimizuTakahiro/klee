@@ -204,9 +204,10 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b, Module &M) {
         llvm::IRBuilder<> Builder(ii);
         Builder.CreateCall(F);
         Builder.CreateUnreachable();
-
-        ii->eraseFromParent();
-
+        i = ii->eraseFromParent();
+        while (i != ie) {
+          i = i->eraseFromParent();
+        }
         dirty = true;
         break;
       }

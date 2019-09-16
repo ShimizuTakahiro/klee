@@ -76,13 +76,16 @@ def getCoverage(path):
 
     return statsData.instructionsCoverage()
 
-def runProgram(kleeCommand, directoryLLVM, directoryGCOV, file):
+def runProgram(kleeCommand, directoryLLVM, directoryGCOV, file, outDir):
+    remove = "rm -rf " + outDir
+    process= subprocess.Popen([remove], shell=True)
+    process.wait()
     process= subprocess.Popen([kleeCommand], shell=True)
     process.wait()
     os.chdir(directoryGCOV)
 
     #Change this code to the kleestar stuff
-    runTests = "klee-replay " + file + " " + directoryLLVM + "/klee-last/*.ktest"
+    runTests = "klee-replay " + file + " " + outDir + "/*.ktest"
     process=subprocess.Popen([runTests], shell=True)
     process.wait()
     
@@ -118,6 +121,7 @@ def main():
     print("gcda: ", gcdaFile)
     os.chdir(directoryLLVM)
 
+
     newBcFiles = []
     for file in bcFiles:
         name = file[0:-3]
@@ -138,42 +142,65 @@ def main():
             newBcFiles += [file]
     bcFiles = newBcFiles
     results = []
-
+    tested = ["ls.bc", "od.bc", "basename.bc", "cat.bc",
+              "chgrp.bc"]
+    bcFiles += ["sort.bc"]
     count = 0
     for file in bcFiles:
-        if file[0:-3] != "od":
+        if file != "sort.bc":
             continue
         path = directoryLLVM+"/"+file
         result = [file]
         print("Running file: ", file)
         #sym-stdout - look it up
         #Use kleestar command on variable 'file'
-        runNoProfiling = " klee --max-memory=1000 --disable-inlining\
-                          --optimize --libc=uclibc --posix-runtime -external-calls=all\
-                          --only-output-states-covering-new --max-sym-array-size=4096\
-                          --max-time=3600 --watchdog --switch-type=internal --search=random-path\
-                          " + path + " --sym-args 0 1 10 --sym-args 0 2 3\
-                          --sym-files 1 8 --sym-stdin 8 --sym-stdout"
-        runWithProfiling = "klee --max-memory=1000 --disable-inlining\
-                          --optimize --libc=uclibc --posix-runtime -external-calls=all\
-                          --only-output-states-covering-new --max-sym-array-size=4096\
-                          --max-time=3600 --watchdog --switch-type=internal --search=nurs:bc\
-                          " + path + " --sym-args 0 1 10 --sym-args 0 3 4\
-                          --sym-files 1 8 --sym-stdin 8 --sym-stdout"
-
-        outProfiling = runProgram(runWithProfiling, directoryLLVM, directoryGCOV, file[0:-3])
-        outNoProfiling = runProgram(runNoProfiling, directoryLLVM, directoryGCOV, file[0:-3])
-        result += [outProfiling, outNoProfiling]
+        outDir = directoryLLVM+"/"+file + ".out"
+        runHighestExecution = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                               --optimize  --libc=uclibc --posix-runtime -external-calls=all\
+                               --only-output-states-covering-new --max-sym-array-size=4096\
+                               --max-time=3600 --watchdog --switch-type=internal --search=pg\
+                               " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                               --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        runInverseWeighting = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                               --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                               --only-output-states-covering-new --max-sym-array-size=4096\
+                               --max-time=3600 --watchdog --switch-type=internal --search=nurs:ibc\
+                               " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                               --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+                             
+        runWeighting = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                        --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                        --only-output-states-covering-new --max-sym-array-size=4096\
+                        --max-time=120 --watchdog --switch-type=internal --search=nurs:bc\
+                        " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                        --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        runDefault = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                      --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                      --only-output-states-covering-new --max-sym-array-size=4096\
+                      --max-time=60 --watchdog --switch-type=internal\
+                      " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                      --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+    
+        outInverseWeighting = runProgram(runInverseWeighting, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        outHighestExecution = runProgram(runHighestExecution, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        outWeighting = runProgram(runWeighting, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        outDefault = runProgram(runDefault, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        result += [outInverseWeighting, outHighestExecution, outWeighting, outDefault]
         results += [result]
+        count += 1
         if count == 2:
             break
-        count += 1
+
     for i in results:
         print("File: ", i[0])
-        print("With profiling result: ")
+        print("With random inverse weighting: ")
         print(i[1])
-        print("Without profiling: ")
+        print("With highest execution count: ")
         print(i[2])
+        print("With random weighting: ")
+        print(i[3])
+        print("With default searcher: ")
+        print(i[4])
     #print(newBcFiles)
 
              

@@ -76,36 +76,133 @@ def getCoverage(path):
 
     return statsData.instructionsCoverage()
 
-#Use gcov for coverage    
+def runProgram(kleeCommand, directoryLLVM, directoryGCOV, file, outDir):
+    remove = "rm -rf " + outDir
+    process= subprocess.Popen([remove], shell=True)
+    process.wait()
+    process= subprocess.Popen([kleeCommand], shell=True)
+    process.wait()
+    os.chdir(directoryGCOV)
+
+    #Change this code to the kleestar stuff
+    runTests = "klee-replay " + file + " " + outDir + "/*.ktest"
+    process=subprocess.Popen([runTests], shell=True)
+    process.wait()
+    
+    runGCOV = "gcov " + file
+    process = subprocess.Popen([runGCOV], shell=True, stdout=subprocess.PIPE)
+    out, err = process.communicate()
+    os.chdir(directoryLLVM)
+    
+    return out.decode('utf-8')
+    
+    
+#Use gcov for coverage
+#Need to instrument c files first
+#sort must have --parallel=1
+#don't run: kill, chco
 def main():
-    runCoreutils = False 
+    exclude = ("kill", "chcon", "chown", "chroot", "dd", "ginstall", "stdbuf", 
+               "libstdbuf", "rm", "rmdir", "unlink")
     parser = argparse.ArgumentParser(description='Run C program on Klee')
-    parser.add_argument('directory', type=str, nargs=1, help='directory of bc files')
-
+    parser.add_argument('directoryLLVM', type=str, nargs=1, help='directory of bc files')
+    parser.add_argument('directoryGCOV', type=str, nargs=1, help='dictory of gcov-instrumented executables')
+    
     args = parser.parse_args()
-    directory = args.directory[0]
-
-    os.chdir(directory)
+    directoryLLVM = args.directoryLLVM[0]
+    directoryGCOV = args.directoryGCOV[0]
+    os.chdir(directoryLLVM)
     files = subprocess.run(["ls"], stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
     bcFiles = [file for file in files if ".bc" in file]
+    cFiles = [file for file in files if ".c" in file]
+    os.chdir(directoryGCOV)
+    files = subprocess.run(["ls"], stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
+    gcdaFile = [file for file in files if ".gcda" in file]
+    print("gcda: ", gcdaFile)
+    os.chdir(directoryLLVM)
 
+
+    newBcFiles = []
     for file in bcFiles:
-        path = directory+"/"+file
-        print("Running ", file)
-        runNoProfiling = "klee --optimize --libc=uclibc --posix-runtime " + path + " --sym-args 0 4 4"
-        runWithProfiling = "klee -search nurs:bc --optimize --libc=uclibc --posix-runtime " + path + " --sym-args 0 4 4"
-        process= subprocess.Popen([runWithProfiling], shell=True)
-        time.sleep(180)
-        process.terminate()
-        coverage = getCoverage(directory+"/klee-last/run.stats")
-        print("Coverage with profiling: ", coverage, "%")
-        process = subprocess.Popen([runNoProfiling], shell=True)
-        time.sleep(180)
-        process.terminate()
-        coverage = getCoverage(directory+"/klee-last/run.stats")
-        print("Coverage without profiling: ", coverage, "%")
-        print()
+        name = file[0:-3]
+        noRun = False
+        for exc in exclude:
+            if exc == name:
+                noRun = True
+                break
+        if noRun:
+            continue
+        found = False
+        for file2 in gcdaFile:
+            #print((name,file2[0:-2]))
+            if name == file2[0:-5]:
+                found = True
+                break
+        if found:
+            newBcFiles += [file]
+    bcFiles = newBcFiles
+    results = []
+    tested = ["ls.bc", "od.bc", "basename.bc", "cat.bc",
+              "chgrp.bc"]
+    bcFiles += ["sort.bc"]
+    count = 0
+    for file in bcFiles:
+        if file != "sort.bc":
+            continue
+        path = directoryLLVM+"/"+file
+        result = [file]
+        print("Running file: ", file)
+        #sym-stdout - look it up
+        #Use kleestar command on variable 'file'
+        outDir = directoryLLVM+"/"+file + ".out"
+        runHighestExecution = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                               --optimize  --libc=uclibc --posix-runtime -external-calls=all\
+                               --only-output-states-covering-new --max-sym-array-size=4096\
+                               --max-time=3600 --watchdog --switch-type=internal --search=pg\
+                               " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                               --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        runInverseWeighting = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                               --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                               --only-output-states-covering-new --max-sym-array-size=4096\
+                               --max-time=3600 --watchdog --switch-type=internal --search=nurs:ibc\
+                               " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                               --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+                             
+        runWeighting = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                        --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                        --only-output-states-covering-new --max-sym-array-size=4096\
+                        --max-time=120 --watchdog --switch-type=internal --search=nurs:bc\
+                        " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                        --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        runDefault = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                      --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                      --only-output-states-covering-new --max-sym-array-size=4096\
+                      --max-time=60 --watchdog --switch-type=internal\
+                      " + path + " --parallel=1 --sym-args 0 1 10 --sym-args 0 2 2\
+                      --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+    
+        outInverseWeighting = runProgram(runInverseWeighting, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        outHighestExecution = runProgram(runHighestExecution, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        outWeighting = runProgram(runWeighting, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        outDefault = runProgram(runDefault, directoryLLVM, directoryGCOV, file[0:-3], outDir)
+        result += [outInverseWeighting, outHighestExecution, outWeighting, outDefault]
+        results += [result]
+        count += 1
+        if count == 2:
+            break
 
-        
+    for i in results:
+        print("File: ", i[0])
+        print("With random inverse weighting: ")
+        print(i[1])
+        print("With highest execution count: ")
+        print(i[2])
+        print("With random weighting: ")
+        print(i[3])
+        print("With default searcher: ")
+        print(i[4])
+    #print(newBcFiles)
+
+             
            
 main()

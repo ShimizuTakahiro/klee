@@ -20,6 +20,24 @@
 #include <set>
 #include <vector>
 
+/**
+    VUzzer plan:
+
+    Calculate weight of basic block using  countofbasicblock/total proggram count
+
+    calculate fitness for each state
+
+    Use random weighted path traversal uisng fitness function results
+
+    freq(b) is number of times a basic block was executed on the way to reaching a particular
+    state
+
+    to get weight of basic block, need to get
+    control flow graphs, obtain basic blocks and compute
+    total count
+
+ */
+
 namespace llvm {
   class BasicBlock;
   class Function;
@@ -83,7 +101,8 @@ namespace klee {
       NURS_CPICnt,
       NURS_QC,
       NURS_BC,
-      NURS_IBC
+      NURS_IBC,
+      NURS_VUZ
     };
   };
 
@@ -139,7 +158,8 @@ namespace klee {
       MinDistToUncovered,
       CoveringNew,
       BranchCount,
-      InvBranchCount
+      InvBranchCount,
+      Vuzzer
     };
 
   private:
@@ -322,7 +342,6 @@ namespace klee {
     }
 
   };
-
 }
 
 

@@ -53,7 +53,8 @@ cl::list<Searcher::CoreSearchType> CoreSearch(
         clEnumValN(Searcher::NURS_QC, "nurs:qc", "use NURS with Query-Cost"),
 
         clEnumValN(Searcher::NURS_BC, "nurs:bc", "use NURS with branch count"),
-        clEnumValN(Searcher::NURS_IBC, "nurs:ibc", "use NURS with inverse branch count")
+        clEnumValN(Searcher::NURS_IBC, "nurs:ibc", "use NURS with inverse branch count"),
+        clEnumValN(Searcher::NURS_VUZ, "nurs:vuz", "use NURS with vuzzer algorithm")
 
             KLEE_LLVM_CL_VAL_END),
     cl::cat(SearchCat));
@@ -127,6 +128,7 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, Executor &executor) {
   case Searcher::NURS_QC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::QueryCost); break;
   case Searcher::NURS_BC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::BranchCount); break;
   case Searcher::NURS_IBC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::InvBranchCount); break;
+  case Searcher::NURS_VUZ: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::Vuzzer); break;
   }
 
   return searcher;

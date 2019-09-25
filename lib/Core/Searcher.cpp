@@ -37,6 +37,7 @@
 #include <climits>
 #include <iostream>
 #include <cstdlib>
+#include <cmath>
 
 using namespace klee;
 using namespace llvm;
@@ -174,6 +175,7 @@ WeightedRandomSearcher::WeightedRandomSearcher(WeightType _type)
   case Depth:
   case BranchCount:
   case InvBranchCount:
+  case Vuzzer:
     updateWeights = false;
     break;
   case InstCount:
@@ -235,6 +237,17 @@ double WeightedRandomSearcher::getWeight(ExecutionState *es) {
 
   case InvBranchCount:
     return es->inverseBranchProbability;
+
+  case Vuzzer:
+    double sum = 0.0;
+    std::map<llvm::BasicBlock*, unsigned>::iterator it = es->basicBlockExecutions.begin();
+    while (it != es->basicBlockExecutions.end()) {
+      unsigned freq= it->second;
+      double weight = Executor::basicBlockWeight(it->first);
+      sum += log2(freq)*weight;
+      it++;
+    }
+    return sum;
   }
 }
 

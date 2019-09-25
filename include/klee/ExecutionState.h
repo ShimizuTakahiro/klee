@@ -24,6 +24,11 @@
 #include <set>
 #include <vector>
 
+namespace llvm {
+class BasicBlock;
+}
+
+
 namespace klee {
 class Array;
 class CallPathNode;
@@ -153,6 +158,8 @@ public:
   // Inverse Probability
   double inverseBranchProbability;
 
+  std::map<llvm::BasicBlock*, unsigned> basicBlockExecutions;
+
 private:
   ExecutionState() : ptreeNode(0) {}
 
@@ -177,6 +184,7 @@ public:
 
   bool merge(const ExecutionState &b);
   void dumpStack(llvm::raw_ostream &out) const;
+
 };
 }
 

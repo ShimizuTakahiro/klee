@@ -551,6 +551,9 @@ public:
   int *getErrnoLocation(const ExecutionState &state) const;
 
   void addWeighting(ExecutionState &current, ExecutionState *leftState, ExecutionState *rightState);
+
+  static double basicBlockWeight(llvm::BasicBlock *block);
+
 };
   
 } // End klee namespace

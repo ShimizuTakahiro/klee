@@ -798,6 +798,7 @@ void Executor::initializeGlobals(ExecutionState &state) {
 void Executor::branch(ExecutionState &state, 
                       const std::vector< ref<Expr> > &conditions,
                       std::vector<ExecutionState*> &result) {
+
   TimerStatIncrementer timer(stats::forkTime);
   unsigned N = conditions.size();
   assert(N);
@@ -1595,6 +1596,11 @@ void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
   if (state.pc->inst->getOpcode() == Instruction::PHI) {
     PHINode *first = static_cast<PHINode*>(state.pc->inst);
     state.incomingBBIndex = first->getBasicBlockIndex(src);
+    if (state.basicBlockExecutions.count(src) == 1)
+      state.basicBlockExecutions[src]++;
+    else
+      state.basicBlockExecutions[src] = 1;
+
   }
 }
 
@@ -4107,7 +4113,27 @@ int *Executor::getErrnoLocation(const ExecutionState &state) const {
 
 ///
 
+double Executor::basicBlockWeight(BasicBlock *block) {
+  //Need to extract total profile weight. if false, set it as 0
+  //Need tp have total program count
+  //weighting is 1 - (1/blockCount)
+
+  Instruction *ins = block->getTerminator();
+
+  if (ins == NULL)
+    return 0;
+
+  uint64_t totalWeight;
+  if (ins->getOpcode() == Instruction::Br &&
+      !ins->extractProfTotalWeight (totalWeight)) {
+    return 0;
+  }
+  return 1.0 - (1.0/totalWeight);
+}
+///
+
 Interpreter *Interpreter::create(LLVMContext &ctx, const InterpreterOptions &opts,
                                  InterpreterHandler *ih) {
   return new Executor(ctx, opts, ih);
 }
+

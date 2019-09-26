@@ -162,6 +162,79 @@ def removeDir(dirToRemove):
     process = subprocess.Popen([remove], shell=True)
     process.wait()
 
+def interleaved():
+    exclude = ("kill", "chcon", "chown", "chroot", "dd", "ginstall", "stdbuf", 
+               "libstdbuf", "rm", "rmdir", "unlink")
+    parser = argparse.ArgumentParser(description='Run C program on Klee')
+    parser.add_argument('directoryLLVM', type=str, nargs=1, help='directory of bc files')
+    parser.add_argument('directoryGCOV', type=str, nargs=1, help='dictory of gcov-instrumented executables')
+    
+    args = parser.parse_args()
+    directoryLLVM = args.directoryLLVM[0]
+    directoryGCOV = args.directoryGCOV[0]
+    os.chdir(directoryLLVM)
+    #files = subprocess.run(["ls"], stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
+    #bcFiles = [file for file in files if ".bc" in file]
+    #cFiles = [file for file in files if ".c" in file]
+    os.chdir(directoryGCOV)
+    #files = subprocess.run(["ls"], stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
+    #gcnoFile = [file for file in files if ".gcno" in file]
+    #print("gcno: ", gcnoFile)
+    os.chdir(directoryLLVM)
+
+    """
+    newBcFiles = []
+    for file in bcFiles:
+        name = file[0:-3]
+        noRun = False
+        for exc in exclude:
+            if exc == name:
+                noRun = True
+                break
+        if noRun:
+            continue
+        found = False
+        for file2 in gcnoFile:
+            #print((name,file2[0:-2]))
+            if name == file2[0:-5]:
+                found = True
+                break
+        if found:
+            newBcFiles += [file]
+    bcFiles = newBcFiles
+    print(bcFiles)
+    results = []
+    tested = ["od.bc", "basename.bc"
+              "chgrp.bc"]"""
+    toTest = ["ls.bc"]
+    results = []
+    #bcFiles = ["ls.bc", "cat.bc"] + bcFiles
+    for file in toTest:     
+        path = directoryLLVM+"/"+file
+        result = [file]
+        print("Running file: ", file)
+        #sym-stdout - look it up
+        #Use kleestar command on variable 'file'
+        outDir = directoryLLVM+"/"+file + ".out"
+    
+        
+        runWeighting = "klee -output-dir=" + outDir + " --max-memory=1000 --disable-inlining\
+                        --optimize --libc=uclibc --posix-runtime -external-calls=all\
+                        --only-output-states-covering-new --max-sym-array-size=4096\
+                        --max-time=3600 --watchdog --switch-type=internal --search=nurs:covnew --search=nurs:bc\
+                        " + path + " --sym-args 0 1 10 --sym-args 0 2 2\
+                        --sym-files 1 8 --sym-stdin 8 --sym-stdout"
+        
+        outvuzzer = runProgram(runWeighting, directoryLLVM, directoryGCOV, file[0:-3], outDir)  
+        
+        result += [outvuzzer]
+        results += [result]
+  
+    for i in results:
+        print("File: ", i[0])
+        print("Interleaved result")
+        print(i[1])
+    
 def vuzzerTest():
        #Run each test for half the time
     exclude = ("kill", "chcon", "chown", "chroot", "dd", "ginstall", "stdbuf", 
@@ -442,7 +515,7 @@ def main():
         print(i[4])
     #print(newBcFiles)
 
-             
-vuzzerTest()           
+interleaved()             
+#vuzzerTest()           
 #main()
 #unionTest()
